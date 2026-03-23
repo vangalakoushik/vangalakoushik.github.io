@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zombie Shooter | Koushik</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:monospace}
+  h1{color:#FFD93D;font-size:1.4rem;letter-spacing:3px;margin-bottom:12px;text-transform:uppercase}
+  #game-wrap{background:#1a1a1a;border-radius:12px;overflow:hidden;width:700px;max-width:98vw;box-shadow:0 0 40px rgba(0,0,0,0.8)}
+  #hud{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:#111;border-bottom:1px solid #333}
+  .hud-item{text-align:center}
+  .hud-label{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px}
+  .hud-val{font-size:22px;font-weight:700;color:#eee;font-family:monospace}
+  .hud-val.green{color:#6BCB77}
+  .hud-val.red{color:#FF6B6B}
+  .hud-val.yellow{color:#FFD93D}
+  #arena{position:relative;background:#1a1a1a;cursor:crosshair;overflow:hidden;height:420px}
+  #ground{position:absolute;bottom:0;left:0;right:0;height:60px;background:#2a1a0a;border-top:3px solid #3a2a1a}
+  #fence{position:absolute;bottom:60px;left:0;right:0;height:20px;background:repeating-linear-gradient(90deg,#5a3a1a 0px,#5a3a1a 14px,#3a2a1a 14px,#3a2a1a 18px)}
+  .zombie{position:absolute;bottom:60px;cursor:crosshair;transition:left 0.05s linear;animation:zSway 0.6s ease-in-out infinite alternate}
+  @keyframes zSway{from{transform:rotate(-3deg)}to{transform:rotate(3deg)}}
+  .zombie svg{display:block}
+  .zombie.hit{animation:zHit 0.3s ease-out forwards}
+  @keyframes zHit{0%{transform:scale(1)}50%{transform:scale(1.3) rotate(10deg)}100%{transform:scale(0) rotate(30deg);opacity:0}}
+  .splat{position:absolute;font-size:20px;pointer-events:none;animation:splatAnim 0.6s ease-out forwards;color:#8B0000;font-weight:700;font-family:monospace}
+  @keyframes splatAnim{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-40px) scale(1.5)}}
+  .muzzle{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);width:80px;height:28px;background:#333;border-radius:4px;border:1px solid #555;display:flex;align-items:center;justify-content:center}
+  .muzzle-barrel{width:48px;height:10px;background:#555;border-radius:2px}
+  .flash{position:absolute;width:20px;height:20px;background:#FFD93D;border-radius:50%;top:50%;right:-10px;transform:translateY(-50%);opacity:0;pointer-events:none}
+  .flash.show{animation:flashAnim 0.1s ease-out forwards}
+  @keyframes flashAnim{0%{opacity:1;transform:translateY(-50%) scale(1)}100%{opacity:0;transform:translateY(-50%) scale(2)}}
+  #overlay{position:absolute;inset:0;background:rgba(0,0,0,0.88);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10}
+  #overlay h2{color:#FFD93D;font-size:28px;font-weight:700;margin-bottom:8px;font-family:monospace}
+  #overlay p{color:#aaa;font-size:14px;margin-bottom:20px;text-align:center;max-width:300px;line-height:1.7}
+  #overlay .big-score{font-size:52px;font-weight:700;color:#6BCB77;font-family:monospace;margin-bottom:8px}
+  .start-btn{background:#FF6B6B;color:#fff;border:none;padding:13px 36px;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;font-family:monospace;letter-spacing:1px;transition:background .2s,transform .1s}
+  .start-btn:hover{background:#ff4444;transform:scale(1.04)}
+  .start-btn:active{transform:scale(0.97)}
+  .level-badge{background:#FFD93D;color:#1a1a1a;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;font-family:monospace;margin-bottom:14px;letter-spacing:2px}
+  #ammo-bar{display:flex;gap:4px;align-items:center}
+  .bullet{width:8px;height:16px;background:#FFD93D;border-radius:2px;transition:background 0.2s}
+  .bullet.empty{background:#333}
+  #reload-msg{font-size:11px;color:#FF6B6B;font-weight:700;margin-left:6px;opacity:0;transition:opacity 0.2s}
+  #reload-msg.show{opacity:1}
+  .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;margin-bottom:18px;text-align:left}
+  .stat-row{font-size:13px;color:#aaa}.stat-row span{color:#eee;font-weight:700}
+  footer{color:#444;font-size:12px;margin-top:14px;letter-spacing:1px}
+</style>
+</head>
+<body>
+
+<h1>Zombie Shooter</h1>
+
+<div id="game-wrap">
+  <div id="hud">
+    <div class="hud-item">
+      <div class="hud-label">Score</div>
+      <div class="hud-val green" id="score-display">0</div>
+    </div>
+    <div class="hud-item">
+      <div class="hud-label">Level</div>
+      <div class="hud-val yellow" id="level-display">1</div>
+    </div>
+    <div class="hud-item">
+      <div class="hud-label">Time</div>
+      <div class="hud-val" id="timer-display">30</div>
+    </div>
+    <div class="hud-item" style="text-align:right">
+      <div class="hud-label">Ammo</div>
+      <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
+        <div id="ammo-bar"></div>
+        <span id="reload-msg">R to reload</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="arena">
+    <div id="fence"></div>
+    <div id="ground"></div>
+    <div class="muzzle" id="gun">
+      <div class="muzzle-barrel"></div>
+      <div class="flash" id="flash"></div>
+    </div>
+    <div id="overlay">
+      <div class="level-badge">ZOMBIE RANGE</div>
+      <h2>Zombie Shooter</h2>
+      <p>Click zombies to shoot them!<br>Press <strong style="color:#FFD93D">R</strong> to reload your gun.<br>Survive all 5 waves to win!</p>
+      <button class="start-btn" onclick="startGame()">START GAME</button>
+    </div>
+  </div>
+</div>
+
+<footer>made by koushik vangala &nbsp;|&nbsp; vangalakoushik.github.io</footer>
+
+<script>
+const LEVELS=[
+  {time:30,speed:1.2,spawnRate:2000,points:10},
+  {time:30,speed:1.8,spawnRate:1500,points:20},
+  {time:30,speed:2.4,spawnRate:1100,points:30},
+  {time:25,speed:3.2,spawnRate:800,points:50},
+  {time:20,speed:4.0,spawnRate:600,points:100}
+];
+
+let score=0,level=1,timeLeft=30,ammo=6,maxAmmo=6;
+let zombies=[],gameRunning=false;
+let spawnTimer=null,countTimer=null,moveInterval=null;
+let killed=0,totalSpawned=0;
+
+const arena=document.getElementById('arena');
+const scoreEl=document.getElementById('score-display');
+const levelEl=document.getElementById('level-display');
+const timerEl=document.getElementById('timer-display');
+const overlay=document.getElementById('overlay');
+const ammoBar=document.getElementById('ammo-bar');
+const reloadMsg=document.getElementById('reload-msg');
+const flash=document.getElementById('flash');
+
+function makeBullets(){
+  ammoBar.innerHTML='';
+  for(let i=0;i<maxAmmo;i++){
+    const b=document.createElement('div');
+    b.className='bullet'+(i>=ammo?' empty':'');
+    ammoBar.appendChild(b);
+  }
+  reloadMsg.className=ammo===0?'show':'';
+}
+
+function zombieSVG(type){
+  const colors=[['#5a8a3a','#3a6a1a'],['#8a3a3a','#6a1a1a'],['#3a5a8a','#1a3a6a'],['#7a5a2a','#5a3a0a']];
+  const [body,dark]=colors[type%colors.length];
+  return `<svg width="36" height="64" viewBox="0 0 36 64" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="18" cy="12" rx="10" ry="11" fill="${body}"/>
+    <circle cx="14" cy="10" r="2.5" fill="#ff4444"/>
+    <circle cx="22" cy="10" r="2.5" fill="#ff4444"/>
+    <circle cx="14" cy="10" r="1.2" fill="#fff"/>
+    <circle cx="22" cy="10" r="1.2" fill="#fff"/>
+    <rect x="13" y="18" width="10" height="2" rx="1" fill="${dark}"/>
+    <rect x="8" y="23" width="20" height="22" rx="4" fill="${body}"/>
+    <rect x="2" y="22" width="8" height="16" rx="3" fill="${body}" transform="rotate(-15 6 30)"/>
+    <rect x="26" y="22" width="8" height="16" rx="3" fill="${body}" transform="rotate(15 30 30)"/>
+    <rect x="10" y="44" width="7" height="18" rx="3" fill="${dark}"/>
+    <rect x="19" y="44" width="7" height="18" rx="3" fill="${dark}"/>
+    <rect x="8" y="59" width="9" height="5" rx="2" fill="${body}"/>
+    <rect x="19" y="59" width="9" height="5" rx="2" fill="${body}"/>
+  </svg>`;
+}
+
+function spawnZombie(){
+  if(!gameRunning) return;
+  const cfg=LEVELS[level-1];
+  const el=document.createElement('div');
+  el.className='zombie';
+  const side=Math.random()<0.5?'left':'right';
+  const type=Math.floor(Math.random()*4);
+  el.innerHTML=zombieSVG(type);
+  const startX=side==='left'?-40:arena.offsetWidth+10;
+  el.style.left=startX+'px';
+  el.dataset.dir=side==='left'?'1':'-1';
+  el.dataset.speed=(cfg.speed*(0.8+Math.random()*0.4)).toFixed(2);
+  el.dataset.alive='1';
+  arena.appendChild(el);
+  zombies.push(el);
+  totalSpawned++;
+  el.addEventListener('click',e=>{e.stopPropagation();shootZombie(el,cfg.points);});
+}
+
+function shootZombie(el,pts){
+  if(!gameRunning||el.dataset.alive!=='1') return;
+  if(ammo<=0){reloadMsg.className='show';return;}
+  ammo--;makeBullets();
+  doFlash();
+  el.dataset.alive='0';
+  el.classList.add('hit');
+  score+=pts;killed++;
+  scoreEl.textContent=score;
+  const splat=document.createElement('div');
+  splat.className='splat';
+  splat.textContent='+'+pts;
+  splat.style.left=(parseFloat(el.style.left)+10)+'px';
+  splat.style.bottom='130px';
+  arena.appendChild(splat);
+  setTimeout(()=>{splat.remove();},600);
+  setTimeout(()=>{el.remove();zombies=zombies.filter(z=>z!==el);},300);
+}
+
+function doFlash(){
+  flash.className='flash show';
+  setTimeout(()=>flash.className='flash',150);
+}
+
+function startGame(){
+  score=0;level=1;killed=0;totalSpawned=0;ammo=maxAmmo;
+  scoreEl.textContent='0';levelEl.textContent='1';
+  makeBullets();
+  overlay.style.display='none';
+  gameRunning=true;
+  startLevel();
+}
+
+function startLevel(){
+  const cfg=LEVELS[level-1];
+  timeLeft=cfg.time;
+  timerEl.textContent=timeLeft;
+  timerEl.style.color='#eee';
+  zombies.forEach(z=>z.remove());zombies=[];
+  clearInterval(spawnTimer);clearInterval(countTimer);clearInterval(moveInterval);
+  spawnTimer=setInterval(spawnZombie,cfg.spawnRate);
+  moveInterval=setInterval(()=>{
+    if(!gameRunning) return;
+    zombies.forEach(z=>{
+      if(z.dataset.alive!=='1') return;
+      const x=parseFloat(z.style.left)||0;
+      const spd=parseFloat(z.dataset.speed);
+      const dir=parseFloat(z.dataset.dir);
+      const nx=x+spd*dir;
+      z.style.left=nx+'px';
+      if(nx>arena.offsetWidth+50||nx<-50){
+        z.remove();zombies=zombies.filter(zz=>zz!==z);
+      }
+    });
+  },16);
+  countTimer=setInterval(()=>{
+    timeLeft--;
+    timerEl.textContent=timeLeft;
+    timerEl.style.color=timeLeft<=10?'#FF6B6B':'#eee';
+    if(timeLeft<=0){
+      clearInterval(countTimer);clearInterval(spawnTimer);
+      if(level<LEVELS.length){
+        level++;levelEl.textContent=level;
+        ammo=maxAmmo;makeBullets();
+        showLevelUp();
+      } else {
+        endGame();
+      }
+    }
+  },1000);
+}
+
+function showLevelUp(){
+  clearInterval(moveInterval);
+  gameRunning=false;
+  zombies.forEach(z=>z.remove());zombies=[];
+  overlay.style.display='flex';
+  overlay.innerHTML=`<div class="level-badge">WAVE ${level}</div>
+    <h2>Level ${level}!</h2>
+    <p>Zombies are getting faster and angrier...<br>Score so far: <span style="color:#6BCB77;font-weight:700">${score}</span></p>
+    <button class="start-btn" onclick="continueGame()">NEXT WAVE</button>`;
+}
+
+function continueGame(){
+  overlay.style.display='none';
+  gameRunning=true;
+  startLevel();
+}
+
+function endGame(){
+  gameRunning=false;
+  clearInterval(moveInterval);
+  zombies.forEach(z=>z.remove());zombies=[];
+  const acc=totalSpawned>0?Math.round(killed/totalSpawned*100):0;
+  overlay.style.display='flex';
+  overlay.innerHTML=`<div class="level-badge">GAME OVER</div>
+    <h2>You survived!</h2>
+    <div class="big-score">${score}</div>
+    <div class="stats-grid">
+      <div class="stat-row">Zombies killed: <span>${killed}</span></div>
+      <div class="stat-row">Total spawned: <span>${totalSpawned}</span></div>
+      <div class="stat-row">Accuracy: <span>${acc}%</span></div>
+      <div class="stat-row">Max level: <span>${level}</span></div>
+    </div>
+    <button class="start-btn" onclick="startGame()">PLAY AGAIN</button>`;
+}
+
+arena.addEventListener('click',()=>{
+  if(!gameRunning) return;
+  if(ammo<=0){reloadMsg.className='show';return;}
+  ammo--;makeBullets();doFlash();
+});
+
+document.addEventListener('keydown',e=>{
+  if((e.key==='r'||e.key==='R')&&gameRunning){
+    ammo=maxAmmo;makeBullets();
+  }
+});
+
+makeBullets();
+</script>
+</body>
+</html>
